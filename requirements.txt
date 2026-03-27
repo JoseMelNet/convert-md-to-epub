@@ -1,0 +1,3 @@
+# Este proyecto no requiere dependencias externas de Python.
+# Solo necesitas Python 3.12 y Pandoc instalado en el sistema.
+pandoc==2.4
