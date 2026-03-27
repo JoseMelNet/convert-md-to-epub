@@ -1,6 +1,7 @@
 # Convert Markdown to EPUB
 
 Utilidad local y simple para convertir archivos `.md` a `.epub` usando Pandoc.
+El EPUB generado incluye una imagen de portada automatica para que se vea como miniatura en bibliotecas compatibles, sin agregar una portada HTML dentro del contenido del libro.
 
 ## Estructura del proyecto
 
@@ -21,6 +22,12 @@ Necesitas `Pandoc` para generar el EPUB. El script intenta encontrarlo en este o
 1. Variable de entorno `PANDOC_PATH`
 2. Archivo local `tools/pandoc/pandoc.exe`
 3. `pandoc` disponible en `PATH`
+
+Tambien necesitas instalar las dependencias de Python:
+
+```powershell
+pip install -r requirements.txt
+```
 
 ### Opcion recomendada en Windows sin depender de PATH
 
@@ -92,9 +99,22 @@ La conversion usa Pandoc con estas opciones:
 - `--standalone`
 - `--split-level=2`
 - `--mathml`
+- `--epub-cover-image`
 - `--metadata title=...`
 - `--metadata author=...`
 - `--metadata lang=...`
+
+## Portada automatica
+
+En cada conversion el script genera una imagen PNG temporal de portada con estas caracteristicas:
+
+- formato vertical de `1600 x 2400`
+- fondo claro
+- titulo centrado con ajuste automatico de lineas
+- autor en la parte inferior
+
+Esa imagen se usa como portada real del EPUB para mostrar la miniatura del libro en la biblioteca del lector.
+No se genera `cover.html` ni se inserta una portada interna dentro del contenido del libro.
 
 ## Donde poner los archivos `.md`
 

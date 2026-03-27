@@ -5,7 +5,11 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
+import textwrap
 from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFont
 
 
 # Rutas base del proyecto.
@@ -21,6 +25,15 @@ OUTPUT_DIR = BASE_DIR / "output_epub"
 LOCAL_PANDOC_CANDIDATES = [
     BASE_DIR / "tools" / "pandoc" / "pandoc.exe",
 ]
+
+
+def load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    for font_name in ("arial.ttf", "Arial.ttf", "DejaVuSans.ttf"):
+        try:
+            return ImageFont.truetype(font_name, size=size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
 
 
 def parse_args() -> argparse.Namespace:
@@ -91,10 +104,104 @@ def validate_pandoc(pandoc_path: str) -> bool:
         return False
 
 
+def wrap_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    max_width: int,
+) -> list[str]:
+    words = text.split()
+    if not words:
+        return [""]
+
+    lines: list[str] = []
+    current_line = words[0]
+
+    for word in words[1:]:
+        candidate = f"{current_line} {word}"
+        bbox = draw.textbbox((0, 0), candidate, font=font)
+        if bbox[2] - bbox[0] <= max_width:
+            current_line = candidate
+        else:
+            lines.append(current_line)
+            current_line = word
+
+    lines.append(current_line)
+    return lines
+
+
+def fit_title_lines(
+    draw: ImageDraw.ImageDraw,
+    title: str,
+    max_width: int,
+) -> tuple[list[str], ImageFont.FreeTypeFont | ImageFont.ImageFont]:
+    cleaned_title = " ".join(title.split())
+    if not cleaned_title:
+        cleaned_title = "Sin titulo"
+
+    for font_size in range(110, 47, -6):
+        font = load_font(font_size)
+        lines = wrap_text(draw, cleaned_title, font, max_width)
+        if len(lines) <= 6:
+            return lines, font
+
+    font = load_font(48)
+    shortened = textwrap.shorten(cleaned_title, width=90, placeholder="...")
+    return wrap_text(draw, shortened, font, max_width), font
+
+
+def create_cover_image(title: str, author: str) -> Path:
+    width, height = 1600, 2400
+    background_color = "#efe4d1"
+    text_color = "#2f241f"
+    accent_color = "#c9b08a"
+
+    image = Image.new("RGB", (width, height), background_color)
+    draw = ImageDraw.Draw(image)
+
+    title_area_width = width - 240
+    title_lines, title_font = fit_title_lines(draw, title, title_area_width)
+    author_font = load_font(52)
+
+    title_line_height = draw.textbbox((0, 0), "Ag", font=title_font)[3]
+    title_block_height = len(title_lines) * title_line_height + max(0, len(title_lines) - 1) * 24
+    title_start_y = max(280, (height - title_block_height) // 2 - 160)
+
+    draw.rounded_rectangle(
+        (120, 180, width - 120, height - 180),
+        radius=36,
+        outline=accent_color,
+        width=6,
+    )
+
+    current_y = title_start_y
+    for line in title_lines:
+        bbox = draw.textbbox((0, 0), line, font=title_font)
+        line_width = bbox[2] - bbox[0]
+        draw.text(((width - line_width) / 2, current_y), line, fill=text_color, font=title_font)
+        current_y += title_line_height + 24
+
+    author_text = author.strip() or "Autor desconocido"
+    author_bbox = draw.textbbox((0, 0), author_text, font=author_font)
+    author_width = author_bbox[2] - author_bbox[0]
+    author_height = author_bbox[3] - author_bbox[1]
+    author_y = height - 320 - author_height
+
+    draw.line((250, author_y - 70, width - 250, author_y - 70), fill=accent_color, width=4)
+    draw.text(((width - author_width) / 2, author_y), author_text, fill=text_color, font=author_font)
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
+        cover_path = Path(temp_file.name)
+
+    image.save(cover_path, format="PNG")
+    return cover_path
+
+
 def build_command(
     pandoc_path: str,
     input_file: Path,
     output_file: Path,
+    cover_image_file: Path,
     title: str,
     author: str,
     lang: str,
@@ -106,6 +213,7 @@ def build_command(
     - --toc: agrega tabla de contenido
     - --standalone: genera un archivo EPUB completo
     - --epub-chapter-level=2: usa encabezados hasta nivel 2 para separar capítulos
+    - --epub-cover-image: agrega una miniatura real de portada al EPUB
     - --metadata: define título, autor e idioma del EPUB
     """
     return [
@@ -117,6 +225,8 @@ def build_command(
         "--standalone",
         "--split-level=2",
         "--mathml",
+        "--epub-cover-image",
+        str(cover_image_file),
         "--metadata",
         f"title={title}",
         "--metadata",
@@ -193,11 +303,14 @@ def main() -> int:
             print(f"EPUB ya actualizado, no se requiere conversión: {output_file}")
             return 0
 
+    cover_image_file = create_cover_image(title, args.author)
+
     # Construye el comando final de Pandoc.
     command = build_command(
         pandoc_path=pandoc_path,
         input_file=input_file,
         output_file=output_file,
+        cover_image_file=cover_image_file,
         title=title,
         author=args.author,
         lang=args.lang,
@@ -228,6 +341,9 @@ def main() -> int:
         # Error del sistema al intentar ejecutar Pandoc.
         print(f"Error: no se pudo ejecutar Pandoc: {exc}", file=sys.stderr)
         return 1
+    finally:
+        if cover_image_file.exists():
+            cover_image_file.unlink()
 
     # Si Pandoc emitió advertencias no bloqueantes, las muestra.
     if result.stderr.strip():
