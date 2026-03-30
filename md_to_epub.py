@@ -11,6 +11,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+from kindle_email import SmtpConfig, resolve_kindle_recipient, send_epub_via_email
+
 
 # Rutas base del proyecto.
 # BASE_DIR apunta a la carpeta donde vive este script.
@@ -25,6 +27,34 @@ OUTPUT_DIR = BASE_DIR / "output_epub"
 LOCAL_PANDOC_CANDIDATES = [
     BASE_DIR / "tools" / "pandoc" / "pandoc.exe",
 ]
+ENV_FILE = BASE_DIR / ".env"
+
+
+def load_env_file(env_file: Path = ENV_FILE) -> None:
+    """
+    Carga variables simples KEY=VALUE desde un archivo .env local.
+
+    No sobrescribe variables que ya existan en el entorno del proceso.
+    """
+    if not env_file.is_file():
+        return
+
+    for raw_line in env_file.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+
+        if not key:
+            continue
+
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"\"", "'"}:
+            value = value[1:-1]
+
+        os.environ.setdefault(key, value)
 
 
 def load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -54,6 +84,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--title", help="Título del EPUB")
     parser.add_argument("--author", default="Autor desconocido", help="Autor del EPUB")
     parser.add_argument("--lang", default="es", help="Idioma del EPUB")
+    parser.add_argument(
+        "--send-kindle",
+        action="store_true",
+        help="Envía el EPUB por correo a tu Kindle después de generar o validar el archivo.",
+    )
+    parser.add_argument("--kindle-email", help="Correo de tu dispositivo Kindle")
+    parser.add_argument("--smtp-host", help="Servidor SMTP para el envío")
+    parser.add_argument("--smtp-port", type=int, help="Puerto SMTP para el envío")
+    parser.add_argument("--smtp-username", help="Usuario SMTP")
+    parser.add_argument("--smtp-password", help="Clave SMTP o app password")
+    parser.add_argument("--sender-email", help="Correo remitente autorizado en Amazon")
+    parser.add_argument(
+        "--smtp-ssl",
+        action="store_true",
+        help="Usa conexión SMTP con SSL directo en lugar de STARTTLS.",
+    )
+    parser.add_argument(
+        "--no-smtp-starttls",
+        action="store_true",
+        help="Desactiva STARTTLS para servidores SMTP que no lo soportan.",
+    )
     parser.add_argument(
         "--force",
         action="store_true",
@@ -236,6 +287,31 @@ def build_command(
     ]
 
 
+def send_to_kindle(args: argparse.Namespace, output_file: Path) -> int:
+    try:
+        recipient_email = resolve_kindle_recipient(args.kindle_email)
+        smtp_config = SmtpConfig.from_sources(
+            host=args.smtp_host,
+            port=args.smtp_port,
+            username=args.smtp_username,
+            password=args.smtp_password,
+            sender=args.sender_email,
+            use_ssl=args.smtp_ssl,
+            use_starttls=not args.no_smtp_starttls,
+        )
+        send_epub_via_email(
+            epub_file=output_file,
+            recipient_email=recipient_email,
+            smtp_config=smtp_config,
+        )
+    except (OSError, ValueError) as exc:
+        print(f"Error al enviar el EPUB al Kindle: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"EPUB enviado correctamente al Kindle: {recipient_email}")
+    return 0
+
+
 def main() -> int:
     """
     Orquesta el flujo completo de conversión:
@@ -248,6 +324,7 @@ def main() -> int:
     6. Ejecuta Pandoc.
     7. Reporta advertencias o errores.
     """
+    load_env_file()
     args = parse_args()
 
     # Verifica que exista la carpeta de entrada.
@@ -301,6 +378,8 @@ def main() -> int:
         output_mtime = output_file.stat().st_mtime
         if output_mtime >= input_mtime:
             print(f"EPUB ya actualizado, no se requiere conversión: {output_file}")
+            if args.send_kindle:
+                return send_to_kindle(args, output_file)
             return 0
 
     cover_image_file = create_cover_image(title, args.author)
@@ -351,6 +430,8 @@ def main() -> int:
         print(result.stderr.strip())
 
     print(f"EPUB generado correctamente: {output_file}")
+    if args.send_kindle:
+        return send_to_kindle(args, output_file)
     return 0
 
 

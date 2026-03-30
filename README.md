@@ -9,6 +9,8 @@ El EPUB generado incluye una imagen de portada automatica para que se vea como m
 Convert_md_to_epub/
 |-- input_md/
 |-- output_epub/
+|-- .env.example
+|-- kindle_email.py
 |-- md_to_epub.py
 |-- README.md
 |-- requirements.txt
@@ -90,6 +92,72 @@ Si quieres regenerar el EPUB aunque ya exista y este actualizado, usa:
 ```powershell
 python md_to_epub.py documento.md --force
 ```
+
+## Envio automatico a Kindle
+
+Puedes enviar el `.epub` generado a tu direccion `Send to Kindle` usando SMTP.
+
+Antes de usarlo:
+
+- identifica tu correo Kindle en Amazon
+- autoriza el correo remitente en la configuracion de documentos personales de Amazon
+- usa una cuenta SMTP valida, normalmente con app password si tu proveedor lo exige
+
+### Archivo .env
+
+El script carga automaticamente un archivo `.env` ubicado en la raiz del proyecto.
+
+Puedes crear tu archivo a partir de `.env.example` y dejar algo asi:
+
+```dotenv
+RECIPIENT_EMAIL=tu_usuario@kindle.com
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=tu_correo@gmail.com
+SMTP_PASSWORD=tu_app_password
+SENDER_EMAIL=tu_correo@gmail.com
+```
+
+Luego solo ejecutas:
+
+```powershell
+python md_to_epub.py documento.md --send-kindle
+```
+
+### Variables de entorno
+
+```powershell
+$env:RECIPIENT_EMAIL = "tu_usuario@kindle.com"
+$env:SMTP_HOST = "smtp.gmail.com"
+$env:SMTP_PORT = "587"
+$env:SMTP_USERNAME = "tu_correo@gmail.com"
+$env:SMTP_PASSWORD = "tu_app_password"
+$env:SENDER_EMAIL = "tu_correo@gmail.com"
+```
+
+Luego ejecuta:
+
+```powershell
+python md_to_epub.py documento.md --send-kindle
+```
+
+### Parametros directos
+
+```powershell
+python md_to_epub.py documento.md --send-kindle `
+  --kindle-email "tu_usuario@kindle.com" `
+  --smtp-host "smtp.gmail.com" `
+  --smtp-port 587 `
+  --smtp-username "tu_correo@gmail.com" `
+  --smtp-password "tu_app_password" `
+  --sender-email "tu_correo@gmail.com"
+```
+
+Notas:
+
+- por defecto el script usa `STARTTLS`
+- si tu servidor requiere SSL directo, agrega `--smtp-ssl`
+- si el `.epub` ya estaba generado y actualizado, `--send-kindle` lo envia igual sin reconvertir
 
 ## Detalles de conversion
 
