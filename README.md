@@ -80,6 +80,8 @@ scp "zbook:C:/Users/josem/ruta/con espacios/documento.md" input_md/
 
 La primera vez que Amazon recibe de un remitente puede pedir confirmacion por correo.
 
+Probado de punta a punta el 2026-10-11: dos textos de estudio traidos del zbook, convertidos y recibidos en el Kindle.
+
 ## Uso
 
 Coloca tus archivos Markdown dentro de la carpeta `input_md/`.
