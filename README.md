@@ -22,7 +22,7 @@ Convert_md_to_epub/
 Necesitas `Pandoc` para generar el EPUB. El script intenta encontrarlo en este orden:
 
 1. Variable de entorno `PANDOC_PATH`
-2. Archivo local `tools/pandoc/pandoc.exe`
+2. Archivo local `tools/pandoc/pandoc.exe` (o `tools/pandoc/pandoc` en Linux)
 3. `pandoc` disponible en `PATH`
 
 Tambien necesitas instalar las dependencias de Python:
@@ -53,6 +53,32 @@ Puedes verificarlo con:
 ```powershell
 pandoc --version
 ```
+
+## Uso desde el servidor Linux
+
+En el servidor de casa (`~/projects/convert-md-to-epub`) ya esta preparado:
+
+- Pandoc 3.11 oficial en `~/.local/bin/pandoc` (sin sudo), que el script encuentra por `PATH`.
+- Pillow en un entorno propio `.venv/`, creado con `uv`, sin tocar el Python del sistema.
+- `.env` con las credenciales SMTP, en `chmod 600` y fuera de git.
+
+Si hay que montarlo de nuevo:
+
+```bash
+uv venv .venv && uv pip install --python .venv/bin/python -r requirements.txt
+curl -LO https://github.com/jgm/pandoc/releases/download/3.11/pandoc-3.11-linux-amd64.tar.gz
+tar xzf pandoc-3.11-linux-amd64.tar.gz && cp pandoc-3.11/bin/pandoc ~/.local/bin/
+cp .env.example .env && chmod 600 .env   # y llenarlo a mano
+```
+
+Traer un documento del PC Windows (zbook) y enviarlo al Kindle:
+
+```bash
+scp "zbook:C:/Users/josem/ruta/con espacios/documento.md" input_md/
+.venv/bin/python md_to_epub.py documento.md --title "Titulo" --author "Autor" --send-kindle
+```
+
+La primera vez que Amazon recibe de un remitente puede pedir confirmacion por correo.
 
 ## Uso
 

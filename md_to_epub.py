@@ -26,6 +26,7 @@ OUTPUT_DIR = BASE_DIR / "output_epub"
 # antes de intentar encontrarlo en el PATH del sistema.
 LOCAL_PANDOC_CANDIDATES = [
     BASE_DIR / "tools" / "pandoc" / "pandoc.exe",
+    BASE_DIR / "tools" / "pandoc" / "pandoc",
 ]
 ENV_FILE = BASE_DIR / ".env"
 
@@ -339,7 +340,7 @@ def main() -> int:
     pandoc_path = resolve_pandoc()
     if pandoc_path is None:
         print(
-            "Error: no se encontró Pandoc. Define PANDOC_PATH, coloca pandoc.exe en tools/pandoc/ o instálalo en PATH.",
+            "Error: no se encontró Pandoc. Define PANDOC_PATH, coloca pandoc.exe (o pandoc en Linux) en tools/pandoc/ o instálalo en PATH.",
             file=sys.stderr,
         )
         return 1
